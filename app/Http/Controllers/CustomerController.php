@@ -12,7 +12,7 @@ class CustomerController extends Controller
      */
     public function index()
     {
-        $customers = Customer::all();
+        $customers = Customer::query()->where('user_id', auth()->id())->get();
         return view('customers.index', compact('customers'));
     }
 
@@ -36,7 +36,7 @@ class CustomerController extends Controller
             'customer_email' => 'required|email|max:100',
         ]);
         
-        Customer::create($validated);
+        Customer::create(array_merge($validated, ['user_id' => auth()->id()]));
         
         return redirect()->route('customers.index')
             ->with('success', 'Customer created successfully.');

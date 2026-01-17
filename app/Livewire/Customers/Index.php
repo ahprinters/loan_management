@@ -5,6 +5,7 @@ namespace App\Livewire\Customers;
 use App\Models\Customer;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Illuminate\Support\Facades\Auth;
 
 class Index extends Component
 {
@@ -32,7 +33,10 @@ class Index extends Component
     public function render()
     {
         return view('livewire.customers.index', [
-            'customers' => Customer::latest()->paginate(10),
+            'customers' => Customer::query()
+                ->where('user_id', auth::id())
+                ->latest()
+                ->paginate(10),
         ]);
     }
 
@@ -53,7 +57,9 @@ class Index extends Component
     {
         $validated = $this->validate();
 
-        Customer::create($validated);
+        Customer::create(array_merge($validated, [
+            'user_id' => auth::id(),
+        ]));
 
         $this->resetForm();
         $this->dispatch('toast', type: 'success', message: 'Customer created successfully.');
@@ -61,6 +67,8 @@ class Index extends Component
 
     public function edit(Customer $customer)
     {
+        abort_unless($customer->user_id === auth::id(), 403);
+
         $this->customer_id = $customer->id;
         $this->customer_name = $customer->customer_name;
         $this->customer_address = $customer->customer_address;
@@ -75,7 +83,10 @@ class Index extends Component
     {
         $validated = $this->validate();
 
-        $customer = Customer::findOrFail($this->customer_id);
+        $customer = Customer::query()
+            ->where('user_id', auth::id())
+            ->findOrFail($this->customer_id);
+
         $customer->update($validated);
 
         $this->resetForm();
@@ -84,6 +95,8 @@ class Index extends Component
 
     public function destroy(Customer $customer)
     {
+        abort_unless($customer->user_id === auth::id(), 403);
+
         $customer->delete();
 
         // যদি last page থেকে delete করে empty হয়ে যায়, pagination ঠিক রাখতে

@@ -6,10 +6,16 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
 
-        <title>{{ $title ?? 'Page Title' }}</title>
+        <title>{{ $title ?? 'Loan Management' }}</title>
     </head>
     <body>
-        {{ $slot }}
+        <div class="min-h-screen bg-gray-50">
+            <x-topnav />
+
+            <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                {{ $slot }}
+            </main>
+        </div>
 
         @livewireScripts
     </body>

@@ -8,14 +8,20 @@ use Illuminate\Database\Eloquent\Model;
 class Customer extends Model
 {
     use HasFactory;
-    
+
     protected $fillable = [
         'customer_name',
         'customer_address',
         'customer_phone',
-        'customer_email'
+        'customer_email',
+        'user_id',
     ];
-    
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function loans()
     {
         return $this->hasMany(Loan::class);
