@@ -3,15 +3,15 @@
 @section('content')
 <div class="container">
     <h1>Customers</h1>
-    
+
     @if(session('success'))
         <div class="alert alert-success">
             {{ session('success') }}
         </div>
     @endif
-    
+
     <a href="{{ route('customers.create') }}" class="btn btn-success mb-3">Add New Customer</a>
-    
+
     <table class="table table-bordered">
         <thead>
             <tr>

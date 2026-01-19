@@ -30,7 +30,7 @@
             <div class="flex-1">
                 <input
                     type="text"
-                    wire:model.live="search"
+                    wire:model.defer="search"
                     placeholder="Search by customer name, amount, or status..."
                     class="w-full rounded-lg border-gray-300 focus:border-gray-900 focus:ring-gray-900"
                 />

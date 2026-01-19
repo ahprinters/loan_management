@@ -8,7 +8,6 @@ use Livewire\Component;
 use App\Models\Customer;
 use Livewire\WithPagination;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Auth;
 
 class Index extends Component
 {
@@ -42,21 +41,23 @@ class Index extends Component
         $this->resetPage();
     }
 
-    // Open form for creating or editing
     public function openCreate(): void
     {
+        // create policy: class-level is OK
+        $this->authorize('create', Loan::class);
+
         $this->resetForm();
         $this->showForm = true;
     }
 
-    // Open form for editing loan
     public function openEdit(int $id): void
     {
-        $this->authorize('update', Loan::class);  // Authorization check
-
         $loan = Loan::query()
-            ->where('user_id', auth::id())
+            ->where('user_id', auth()->user->id())
             ->findOrFail($id);
+
+        // update policy: MUST pass the loan instance
+        $this->authorize('update', $loan);
 
         $this->editingId = $loan->id;
         $this->customer_id = $loan->customer_id;
@@ -69,53 +70,71 @@ class Index extends Component
         $this->showForm = true;
     }
 
-    // Close form
     public function closeForm(): void
     {
         $this->showForm = false;
         $this->resetForm();
     }
 
-    // Save new loan or update
     public function save(): void
     {
-        $this->authorize('create', Loan::class);  // Authorization check
-
+        // Validation first (ensure all fields are validated before processing)
         $data = $this->validate($this->rules());
 
+        // loan term মাসে based due_date ক্যালকুলেট করুন
+        if ($data['term_months'] && $data['amount']) {
+            // Disburse date (current date or custom)
+            $disbursedAt = now();
+
+            // Adding months to disburse date
+            $due_date = Carbon::parse($disbursedAt)->addMonths((int) $data['term_months'])->format('Y-m-d');
+        }
+
+        // Preparing the payload for database
         $payload = [
-            'user_id' => auth::id(),
+            'user_id' => auth()->user->id(),
             'customer_id' => (int) $data['customer_id'],
             'amount' => (float) $data['amount'],
             'interest_rate' => (float) $data['interest_rate'],
             'term_months' => (int) $data['term_months'],
             'status' => $data['status'],
-            'due_date' => $data['due_date'] ? Carbon::parse($data['due_date'])->format('Y-m-d') : null,
+            'due_date' => $due_date, // using calculated due_date
         ];
 
+        // Update or Create the loan based on the editing status
         if ($this->editingId) {
             $loan = Loan::query()
-                ->where('user_id', auth::id())
+                ->where('user_id', auth()->user->id())
                 ->findOrFail($this->editingId);
 
+            // Authorization: ensuring only authorized users can edit their loans
+            $this->authorize('update', $loan);
+
+            // Update loan with the payload
             $loan->update($payload);
             session()->flash('success', 'Loan updated successfully.');
         } else {
+            // Authorization: ensuring only authorized users can create a loan
+            $this->authorize('create', Loan::class);
+
+            // Create new loan with the payload
             Loan::create($payload);
             session()->flash('success', 'Loan created successfully.');
         }
 
+        // Close the form and reset the fields
         $this->closeForm();
     }
 
-    // Delete loan
+
     public function delete(int $id): void
     {
-        $this->authorize('delete', Loan::class);  // Authorization check
-
         $loan = Loan::query()
-            ->where('user_id', auth::id())
+            ->where('user_id', auth()->user->id())
             ->findOrFail($id);
+
+        // delete policy: instance
+        $this->authorize('delete', $loan);
 
         $loan->delete();
         session()->flash('success', 'Loan deleted successfully.');
@@ -123,45 +142,51 @@ class Index extends Component
         $this->resetPage();
     }
 
-    // Reset form fields
     private function resetForm(): void
     {
         $this->reset([
-            'editingId', 'customer_id', 'amount', 'interest_rate', 'term_months', 'status', 'due_date'
+            'editingId',
+            'customer_id',
+            'amount',
+            'interest_rate',
+            'term_months',
+            'status',
+            'due_date',
         ]);
+
         $this->status = 'active';
     }
 
-    // Validation rules
     private function rules(): array
     {
         return [
             'customer_id' => [
                 'required',
                 'integer',
-                Rule::exists('customers', 'id')->where(fn ($q) => $q->where('user_id', auth::id()))
+                Rule::exists('customers', 'id')
+                    ->where(fn ($q) => $q->where('user_id', auth()->user->id())),
             ],
             'amount' => ['required', 'numeric', 'min:0'],
             'interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'term_months' => ['required', 'integer', 'min:1', 'max:600'],
             'status' => ['required', 'string', Rule::in(['active', 'pending', 'closed', 'overdue'])],
-            'due_date' => ['required', 'date', 'after_or_equal:today'],
+            'due_date' => ['required', 'date'],
         ];
     }
 
-    // Render the loans view with pagination, search and filter applied
     public function render()
     {
-        $this->authorize('viewAny', Loan::class);  // Authorization check
+        // viewAny policy: class-level OK
+        $this->authorize('viewAny', Loan::class);
 
         $customers = Customer::query()
-            ->where('user_id', auth::id())
+            ->where('user_id', auth()->id())
             ->orderBy('customer_name')
             ->get(['id', 'customer_name']);
 
         $loans = Loan::query()
             ->with('customer:id,customer_name')
-            ->where('user_id', auth::id())
+            ->where('user_id', auth()->user->id())
             ->when($this->statusFilter !== 'all', fn ($q) => $q->where('status', $this->statusFilter))
             ->when($this->search !== '', function ($q) {
                 $term = '%' . $this->search . '%';

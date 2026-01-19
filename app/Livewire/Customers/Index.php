@@ -11,80 +11,110 @@ class Index extends Component
 {
     use WithPagination;
 
-    public $customer_id = null;
+    public ?int $customer_id = null;
 
-    public $customer_name = '';
-    public $customer_address = '';
-    public $customer_phone = '';
-    public $customer_email = '';
+    public string $customer_name = '';
+    public string $customer_address = '';
+    public string $customer_phone = '';
+    public string $customer_email = '';
 
-    public $isEdit = false;
+    public bool $isEdit = false;
 
-    protected function rules()
+    protected function rules(): array
     {
         return [
-            'customer_name' => 'required|string|max:100',
-            'customer_address' => 'required|string|max:255',
-            'customer_phone' => 'required|string|max:20',
-            'customer_email' => 'required|email|max:100',
+            'customer_name' => ['required', 'string', 'max:100'],
+            'customer_address' => ['required', 'string', 'max:255'],
+            'customer_phone' => ['required', 'string', 'max:20'],
+            'customer_email' => ['required', 'email', 'max:100'],
         ];
+    }
+
+    private function uid(): int
+    {
+        // Safe: will return int id or abort if not logged in
+        $id = Auth::id();
+        abort_unless($id, 403, 'Unauthorized');
+        return (int) $id;
     }
 
     public function render()
     {
+        $uid = $this->uid();
+
         return view('livewire.customers.index', [
             'customers' => Customer::query()
-                ->where('user_id', auth::id())
+                ->where('user_id', $uid)
                 ->latest()
                 ->paginate(10),
         ]);
     }
 
-    public function resetForm()
+    public function resetForm(): void
     {
-        $this->reset(['customer_id', 'customer_name', 'customer_address', 'customer_phone', 'customer_email', 'isEdit']);
+        $this->reset([
+            'customer_id',
+            'customer_name',
+            'customer_address',
+            'customer_phone',
+            'customer_email',
+            'isEdit',
+        ]);
+
         $this->resetValidation();
+
+        // toast optional: comment out if your frontend doesn't listen this event
         $this->dispatch('toast', type: 'info', message: 'Form reset');
     }
 
-    public function create()
+    public function create(): void
     {
         $this->resetForm();
         $this->isEdit = false;
     }
 
-    public function store()
+    public function store(): void
     {
+        $uid = $this->uid();
+
         $validated = $this->validate();
 
-        Customer::create(array_merge($validated, [
-            'user_id' => auth::id(),
-        ]));
+        Customer::create($validated + [
+            'user_id' => $uid,
+        ]);
 
         $this->resetForm();
         $this->dispatch('toast', type: 'success', message: 'Customer created successfully.');
     }
 
-    public function edit(Customer $customer)
+    public function edit(int $customerId): void
     {
-        abort_unless($customer->user_id === auth::id(), 403);
+        $uid = $this->uid();
+
+        $customer = Customer::query()
+            ->where('user_id', $uid)
+            ->findOrFail($customerId);
 
         $this->customer_id = $customer->id;
-        $this->customer_name = $customer->customer_name;
-        $this->customer_address = $customer->customer_address;
-        $this->customer_phone = $customer->customer_phone;
-        $this->customer_email = $customer->customer_email;
+        $this->customer_name = (string) $customer->customer_name;
+        $this->customer_address = (string) $customer->customer_address;
+        $this->customer_phone = (string) $customer->customer_phone;
+        $this->customer_email = (string) $customer->customer_email;
 
         $this->isEdit = true;
         $this->resetValidation();
     }
 
-    public function update()
+    public function update(): void
     {
+        $uid = $this->uid();
+
+        abort_unless($this->customer_id, 422, 'No customer selected.');
+
         $validated = $this->validate();
 
         $customer = Customer::query()
-            ->where('user_id', auth::id())
+            ->where('user_id', $uid)
             ->findOrFail($this->customer_id);
 
         $customer->update($validated);
@@ -93,13 +123,17 @@ class Index extends Component
         $this->dispatch('toast', type: 'success', message: 'Customer updated successfully.');
     }
 
-    public function destroy(Customer $customer)
+    public function destroy(int $customerId): void
     {
-        abort_unless($customer->user_id === auth::id(), 403);
+        $uid = $this->uid();
+
+        $customer = Customer::query()
+            ->where('user_id', $uid)
+            ->findOrFail($customerId);
 
         $customer->delete();
 
-        // যদি last page থেকে delete করে empty হয়ে যায়, pagination ঠিক রাখতে
+        // If last page becomes empty after delete
         $this->resetPage();
 
         $this->dispatch('toast', type: 'success', message: 'Customer deleted successfully.');
